@@ -1,11 +1,12 @@
 # tf-eager-text-data
 Handling Text data with tf.eager
 
-
+### Setup
 #### Step 1: Getting data
-* We provide the first 100K sentences of English Wikipedia. Feel free to use your favorite dataset.
+* We provide the first 100K sentences of English Wikipedia and a vocab file. Feel free to use your favorite dataset.
     ```bash
     cp data/wiki.100K.txt.zip .
+    cp data/vocab.txt .
     unzip wiki.100K.txt
     ```
 
@@ -28,4 +29,7 @@ source activate tf-eager-text
 ```
 
 
-#### Step 3: Launch Jupyter
+#### Step 3: Launch Jupyter!
+```bash
+jupyter notebook
+```
