@@ -1,5 +1,7 @@
 # tf-eager-text-data
-Handling Text data with tf.eager
+Handling Text data with tf.eager. 
+
+[Blog post on Medium](https://medium.com/@vineet.mundhra/are-you-eager-c304804d0000)
 
 ### Setup
 #### Step 1: Getting data
