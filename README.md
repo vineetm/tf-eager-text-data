@@ -4,21 +4,28 @@ Handling Text data with tf.eager
 
 #### Step 1: Getting data
 * We provide the first 100K sentences of English Wikipedia. Feel free to use your favorite dataset.
-```bash
-./get_data.sh
-```
+    ```bash
+    cp data/wiki.100K.txt.zip .
+    unzip wiki.100K.txt
+    ```
 
-* Unzip and take a peek:
-```bash
-unzip text8.zip
-head text8
-```
+* Take a peek:
+    ```bash
+    head -2 wiki.100K.txt
+   ```
+   ```bash
+    anarchism is a political philosophy that advocates self-governed societies based on voluntary institutions .
+    these are often described as stateless societies , although several authors have defined them more specifically as institutions based on non-hierarchical or free associations .
+    ```
 
 
-#### Install and Setup
+#### Step 2: Install and Setup
 We will list here instructions to set up your environment using Conda environment. You can use any other equivalent setup:
 ```bash
 conda create -n tf-eager-text python=3.6
 source activate tf-eager-text
 (tf-eager-text) pip install -r requirements.txt
 ```
+
+
+#### Step 3: Launch Jupyter
