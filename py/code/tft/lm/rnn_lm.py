@@ -28,12 +28,15 @@ def setup_args():
     parser.add_argument('-cell', default='lstm')
 
     parser.add_argument('-opt', default='adam')
-    parser.add_argument('-lr', default=0.001, type=float)
+    parser.add_argument('-lr', default=0.002, type=float)
+
+    parser.add_argument('-t', default=8, type=int)
 
     parser.add_argument('-bs', default=32, type=int)
     parser.add_argument('-nd', default=256, type=int)
     parser.add_argument('-nh', default=256, type=int)
     parser.add_argument('-dropout', default=0.2, type=float)
+    parser.add_argument('-clip_ratio', default=10.0, type=float)
 
     parser.add_argument('-vocab')
     parser.add_argument('-train')
@@ -90,27 +93,29 @@ class LanguageModel(tf.keras.Model):
         # We want to convert it back to shape batch_size x TimeSteps x h
         rnn_outputs = tf.stack(rnn_outputs_time, axis=1)
         if train:
-            rnn_outputs = tf.nn.dropout(word_vectors, keep_prob=1 - dropout)
+            rnn_outputs = tf.nn.dropout(rnn_outputs, keep_prob=1 - dropout)
         logits = self.output_layer(rnn_outputs)
         return logits
 
 
-def create_dataset(sentences_file, vocab_table, batch_size, eos):
+def create_dataset(sentences_file, vocab_table, batch_size, eos, t):
     # Create a Text Line dataset, which returns a string tensor
     dataset = tf.data.TextLineDataset(sentences_file)
 
     # Convert to a list of words..
-    dataset = dataset.map(lambda sentence: tf.string_split([sentence]).values)
+    dataset = dataset.map(lambda sentence: tf.string_split([sentence]).values, num_parallel_calls=t)
 
     # Create target words right shifted by one, append EOS, also return size of each sentence...
-    dataset = dataset.map(lambda words: (words, tf.concat([words[1:], [eos]], axis=0), tf.size(words)))
+    dataset = dataset.map(lambda words: (words, tf.concat([words[1:], [eos]], axis=0), tf.size(words)), num_parallel_calls=t)
 
     # Lookup words, word->integer, EOS->1
     dataset = dataset.map(lambda src_words, tgt_words, num_words: (vocab_table.lookup(src_words),
-                                                                   vocab_table.lookup(tgt_words), num_words))
+                                                                   vocab_table.lookup(tgt_words), num_words), num_parallel_calls=t)
 
     # [None] -> src words, [None] -> tgt_words, [] length of sentence
     dataset = dataset.padded_batch(batch_size=batch_size, padded_shapes=([None], [None], []))
+
+    #dataset = dataset.prefetch(1)
     return dataset
 
 
@@ -142,7 +147,8 @@ def clip_gradients(grads_and_vars, clip_ratio):
     clipped, _ = tf.clip_by_global_norm(gradients, clip_ratio)
     return zip(clipped, variables)
 
-def check_if_ppl_better(best_valid_ppl, lm, valid_dataset, root, ckpt_prefix):
+
+def check_if_ppl_better(best_valid_ppl, lm, valid_dataset, root, ckpt_prefix, epoch_num, step_num):
     ppl = compute_ppl(lm, valid_dataset)
     if ppl < best_valid_ppl:
         save_path = root.save(ckpt_prefix)
@@ -156,10 +162,11 @@ def check_if_ppl_better(best_valid_ppl, lm, valid_dataset, root, ckpt_prefix):
 
 def main():
     args = setup_args()
+    log_msg(args)
 
     vocab_table = lookup_ops.index_table_from_file(args.vocab, default_value=args.unk_index)
-    train_dataset = create_dataset(args.train, vocab_table, args.bs, args.eos)
-    valid_dataset = create_dataset(args.valid, vocab_table, args.bs, args.eos)
+    train_dataset = create_dataset(args.train, vocab_table, args.bs, args.eos, args.t)
+    valid_dataset = create_dataset(args.valid, vocab_table, args.bs, args.eos, args.t)
 
     loss_and_grads_fun = tfe.implicit_value_and_gradients(train_loss)
     lm = LanguageModel(int(vocab_table.size()), d=args.nd, h=args.nh, cell=args.cell)
@@ -190,11 +197,13 @@ def main():
                 batch_loss = []
 
             if step_num % args.eval_step == 0:
-                better, ppl = check_if_ppl_better(best_valid_ppl, lm, valid_dataset, root, ckpt_prefix)
+                better, ppl = check_if_ppl_better(best_valid_ppl, lm, valid_dataset, root, ckpt_prefix, epoch_num, step_num)
                 if better:
                     best_valid_ppl = ppl
+
+            opt.apply_gradients(clip_gradients(gradients, args.clip_ratio))
         log_msg(f'Epoch: {epoch_num} END')
-        better, ppl = check_if_ppl_better(best_valid_ppl, lm, valid_dataset, root, ckpt_prefix)
+        better, ppl = check_if_ppl_better(best_valid_ppl, lm, valid_dataset, root, ckpt_prefix, epoch_num, step_num=-1)
         if better:
             best_valid_ppl = ppl
 
